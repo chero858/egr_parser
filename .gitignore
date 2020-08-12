@@ -2,3 +2,7 @@
 __pycache__
 venv
 Pipfile
+data1.json
+ip.json
+jur.json
+urls.json
