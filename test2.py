@@ -19,6 +19,14 @@ def load_url(url):
     return resp, url
 
 
+def get_status_code(url):
+    try:
+        code = requests.get(url).status_code
+        return code
+    except Exception:
+        return 404
+
+
 def get(urls):
     with concurrent.futures.ThreadPoolExecutor(max_workers=CONNECTIONS) as executor:
         future_to_url = (executor.submit(load_url, url) for url in urls)
@@ -47,14 +55,19 @@ if __name__ == '__main__':
     time1 = time.time()
 
     while len(all_urls) > 0:
-        get(all_urls)
-        print(len(all_urls))
-        # prev = 0
-        # for i in range(500, len(all_urls), 500):
-        #     get(all_urls[prev:i])
-        #     prev = i
-        #     if i % 1000 == 0:
-        #         print(len(all_urls))
+        amount = len(all_urls) + 100
+        urls_copy = all_urls.copy()
+        for i in range(0, len(all_urls), 500):
+            get(urls_copy[i:i+500])
+            if amount - len(all_urls) < 100:
+                code = get_status_code(urls_copy[i])
+                while code != 200:
+                    print('wait for api')
+                    time.sleep(5)
+                    code = get_status_code(urls_copy[i])
+            if i % 1000 == 0:
+                print(len(all_urls))
+            amount = len(all_urls)
     # get(all_urls)
     time2 = time.time()
     print(f'Took {time2 - time1:.2f} s')
