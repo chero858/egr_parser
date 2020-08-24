@@ -9,25 +9,27 @@ PATH = os.path.dirname(os.path.abspath(__file__))
 ENCODING = 'utf-8'
 
 
-def get_regnums():
-    if os.path.isfile(f'{os.path.join(PATH, "ip.json")}') and os.path.isfile(f'{os.path.join(PATH, "jur.json")}'):
-        with open(f'{os.path.join(PATH, "ip.json")}') as f:
-            ip_regnums = [regnum['NM'] for regnum in json.load(f) if regnum['NM'] is not None]
-        with open(f'{os.path.join(PATH, "jur.json")}') as f:
-            jur_regnums = [regnum['NM'] for regnum in json.load(f) if regnum['NM'] is not None]
-    else:
-        print('Download registration numbers.')
-        ip = requests.get("http://egr.gov.by/egrn/API.jsp?TP=1MASK=01000000000000000").json()
-        ip_regnums = [regnum['NM'] for regnum in ip if regnum['NM'] is not None]
-        with open(f'{os.path.join(PATH, "ip.json")}', 'w', encoding=ENCODING) as f:
-            json.dump(ip, f, ensure_ascii=False)
-        print('ip regnums downloaded')
-        jur = requests.get("http://egr.gov.by/egrn/API.jsp?TP=2&MASK=01000000000000000").json()
-        jur_regnums = [regnum['NM'] for regnum in jur if regnum['NM'] is not None]
-        with open(f'{os.path.join(PATH, "jur.json")}', 'w', encoding=ENCODING) as f:
-            json.dump(jur, f, ensure_ascii=False)
-        print('jur regnums downloaded')
-    return ip_regnums, jur_regnums
+class EgrRegNums:
+    @staticmethod
+    def get_regnums():
+        if os.path.isfile(f'{os.path.join(PATH, "ip.json")}') and os.path.isfile(f'{os.path.join(PATH, "jur.json")}'):
+            with open(f'{os.path.join(PATH, "ip.json")}') as f:
+                ip_regnums = [regnum['NM'] for regnum in json.load(f) if regnum['NM'] is not None]
+            with open(f'{os.path.join(PATH, "jur.json")}') as f:
+                jur_regnums = [regnum['NM'] for regnum in json.load(f) if regnum['NM'] is not None]
+        else:
+            print('Download registration numbers.')
+            ip = requests.get("http://egr.gov.by/egrn/API.jsp?TP=1MASK=01000000000000000").json()
+            ip_regnums = [regnum['NM'] for regnum in ip if regnum['NM'] is not None]
+            with open(f'{os.path.join(PATH, "ip.json")}', 'w', encoding=ENCODING) as f:
+                json.dump(ip, f, ensure_ascii=False)
+            print('ip regnums downloaded')
+            jur = requests.get("http://egr.gov.by/egrn/API.jsp?TP=2&MASK=01000000000000000").json()
+            jur_regnums = [regnum['NM'] for regnum in jur if regnum['NM'] is not None]
+            with open(f'{os.path.join(PATH, "jur.json")}', 'w', encoding=ENCODING) as f:
+                json.dump(jur, f, ensure_ascii=False)
+            print('jur regnums downloaded')
+        return ip_regnums, jur_regnums
 
 
 class EgrParser:
