@@ -18,8 +18,10 @@ class EgrRegNums:
             with open(f'{os.path.join(PATH, "jur.json")}') as f:
                 jur_regnums = [regnum['NM'] for regnum in json.load(f) if regnum['NM'] is not None]
         else:
+            ip_url = 'http://egr.gov.by/egrn/API.jsp?TP=1&MASK=01000000000000000'
+            # EgrParser.server_check(ip_url)
             print('Download registration numbers.')
-            ip = requests.get("http://egr.gov.by/egrn/API.jsp?TP=1MASK=01000000000000000").json()
+            ip = requests.get(ip_url).json()
             ip_regnums = [regnum['NM'] for regnum in ip if regnum['NM'] is not None]
             with open(f'{os.path.join(PATH, "ip.json")}', 'w', encoding=ENCODING) as f:
                 json.dump(ip, f, ensure_ascii=False)
@@ -48,8 +50,9 @@ class EgrParser:
         resp = requests.get(url)
         return resp, url
 
-    def server_check(self):
-        resp, _ = self.load_url('http://egr.gov.by/api/v2/egr/getAllAddressByRegNum/100059271')
+    @staticmethod
+    def server_check(url='http://egr.gov.by/api/v2/egr/getAllAddressByRegNum/100059271'):
+        resp, _ = EgrParser.load_url(url)
         resp.raise_for_status()
 
     def get_jsons(self, urls):
@@ -58,20 +61,22 @@ class EgrParser:
             for future in concurrent.futures.as_completed(future_to_url):
                 try:
                     resp, url = future.result()
+                except Exception:
+                    continue
+                try:
                     data = resp.json()
-                    regnum = int(url.split('/')[-1])
-                    if not self.main_list.get(regnum):
-                        self.main_list[regnum] = []
-                    self.main_list[regnum] += data if isinstance(data, list) else [data, ]
-                    self.all_urls.remove(url)
                 except JSONDecodeError:
                     self.all_urls.remove(url)
-                # except Exception as e:
-                #     print(f"Unable to get url due to {e.__class__}.")
+                    continue
+                regnum = int(url.split('/')[-1])
+                if not self.main_list.get(regnum):
+                    self.main_list[regnum] = []
+                self.main_list[regnum] += data if isinstance(data, list) else [data, ]
+                self.all_urls.remove(url)
 
-    def create_urls(self, regnums, method):
+    def create_urls(self, regnums, separate_method):
         for regnum in regnums:
-            for method in self.common_methods + method:
+            for method in self.common_methods + separate_method:
                 self.all_urls.append(f'http://egr.gov.by/api/v2/egr/{method}/{regnum}')
 
     def get_urls(self):
@@ -106,7 +111,7 @@ class EgrParser:
 
 
 def main():
-    ip_regnums, jur_regnums = get_regnums()
+    ip_regnums, jur_regnums = EgrRegNums.get_regnums()
     egr = EgrParser(ip_regnums, jur_regnums)
     time1 = time.time()
     try:
