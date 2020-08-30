@@ -113,9 +113,9 @@ class EgrParser:
     def save_data(self):
         if not os.path.exists(os.path.join(PATH, 'jsons')):
             os.mkdir(os.path.join(PATH, 'jsons'))
-        for i in range(0, len(self.main_list), 500):
-            with open(os.path.join(PATH, 'jsons', f'data{int(i / 500 + 1)}.json'), 'w', encoding=ENCODING) as f:
-                json.dump(dict(itertools.islice(self.main_list.items(), i, i + 500)), f, ensure_ascii=False)
+        for i in range(0, len(self.main_list), 20000):
+            with open(os.path.join(PATH, 'jsons', f'data{int(i / 20000 + 1)}.json'), 'w', encoding=ENCODING) as f:
+                json.dump(dict(itertools.islice(self.main_list.items(), i, i + 20000)), f, ensure_ascii=False)
 
 
 def main():
