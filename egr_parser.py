@@ -1,3 +1,4 @@
+import itertools
 import time
 from json import JSONDecodeError
 import concurrent.futures
@@ -55,24 +56,28 @@ class EgrParser:
         resp, _ = EgrParser.load_url(url)
         resp.raise_for_status()
 
+    def parse_json(self, resp, url):
+        try:
+            data = resp.json()
+        except JSONDecodeError:
+            self.all_urls.remove(url)
+            return
+        regnum = int(url.split('/')[-1])
+        if not self.main_list.get(regnum):
+            self.main_list[regnum] = []
+        self.main_list[regnum] += data if isinstance(data, list) else [data, ]
+        self.all_urls.remove(url)
+
     def get_jsons(self, urls):
         with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
             future_to_url = (executor.submit(self.load_url, url) for url in urls)
             for future in concurrent.futures.as_completed(future_to_url):
                 try:
                     resp, url = future.result()
-                except Exception:
+                except requests.exceptions.ConnectionError:
                     continue
-                try:
-                    data = resp.json()
-                except JSONDecodeError:
-                    self.all_urls.remove(url)
-                    continue
-                regnum = int(url.split('/')[-1])
-                if not self.main_list.get(regnum):
-                    self.main_list[regnum] = []
-                self.main_list[regnum] += data if isinstance(data, list) else [data, ]
-                self.all_urls.remove(url)
+                else:
+                    self.parse_json(resp, url)
 
     def create_urls(self, regnums, separate_method):
         for regnum in regnums:
@@ -93,6 +98,7 @@ class EgrParser:
     def get_data(self):
         self.server_check()
         self.get_urls()
+        self.all_urls = self.all_urls[:40000]
         time1 = time.time()
         while len(self.all_urls) > 0:
             for i in range(0, len(self.all_urls), 500):
@@ -105,9 +111,11 @@ class EgrParser:
         return self.main_list
 
     def save_data(self):
-        for i in range(0, len(self.main_list), 20000):
-            with open(os.path.join(PATH, 'jsons', f'data{int(i / 20000 + 1)}.json'), 'w', encoding=ENCODING) as f:
-                json.dump(self.main_list[i:i + 20000], f, ensure_ascii=False)
+        if not os.path.exists(os.path.join(PATH, 'jsons')):
+            os.mkdir(os.path.join(PATH, 'jsons'))
+        for i in range(0, len(self.main_list), 500):
+            with open(os.path.join(PATH, 'jsons', f'data{int(i / 500 + 1)}.json'), 'w', encoding=ENCODING) as f:
+                json.dump(dict(itertools.islice(self.main_list.items(), i, i + 500)), f, ensure_ascii=False)
 
 
 def main():
