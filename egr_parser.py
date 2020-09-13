@@ -1,45 +1,58 @@
 import itertools
 import time
 from json import JSONDecodeError
-import concurrent.futures
 import requests
 import json
 import os
+from os.path import join, dirname, abspath, isfile, exists
 
-PATH = os.path.dirname(os.path.abspath(__file__))
+import concurrent.futures
+
+PATH = dirname(abspath(__file__))
 ENCODING = 'utf-8'
 
 
 class EgrRegNums:
-    @staticmethod
-    def get_regnums():
-        if os.path.isfile(os.path.join(PATH, "ip.json")) and os.path.isfile(os.path.join(PATH, "jur.json")):
-            with open(os.path.join(PATH, "ip.json")) as f:
-                ip_regnums = [regnum['NM'] for regnum in json.load(f)]
-            with open(os.path.join(PATH, "jur.json")) as f:
-                jur_regnums = [regnum['NM'] for regnum in json.load(f)]
+    def __init__(self):
+        self.ip_regnums = []
+        self.jur_regnums = []
+        self.ip_path = join(PATH, "ip.json")
+        self.jur_path = join(PATH, "jur.json")
+
+    def get_regnums_from_file(self):
+        with open(self.ip_path) as f:
+            self.ip_regnums = [regnum['NM'] for regnum in json.load(f)]
+        with open(self.jur_path) as f:
+            self.jur_regnums = [regnum['NM'] for regnum in json.load(f)]
+
+    def save_regnums(self, filename, regnums_json):
+        with open(join(PATH, filename), 'w', encoding=ENCODING) as f:
+            json.dump(regnums_json, f, ensure_ascii=False)
+
+    def get_regnums_from_api(self):
+        print('Download registration numbers.')
+        ip = requests.get('http://egr.gov.by/egrn/API.jsp?TP=2&MASK=01000000000000000').json()
+        self.ip_regnums = [regnum['NM'] for regnum in ip]
+        self.save_regnums('ip.json', ip)
+        print('ip regnums downloaded')
+        jur = requests.get("http://egr.gov.by/egrn/API.jsp?TP=1&MASK=01000000000000000").json()
+        self.jur_regnums = [regnum['NM'] for regnum in jur]
+        self.save_regnums('jur.json', jur)
+        print('jur regnums downloaded')
+
+    def get_regnums(self):
+        if isfile(join(PATH, "ip.json")) and isfile(join(PATH, "jur.json")):
+            self.get_regnums_from_file()
         else:
-            ip_url = 'http://egr.gov.by/egrn/API.jsp?TP=1&MASK=01000000000000000'
-            # EgrParser.server_check(ip_url)
-            print('Download registration numbers.')
-            ip = requests.get(ip_url).json()
-            ip_regnums = [regnum['NM'] for regnum in ip]
-            with open(os.path.join(PATH, "ip.json"), 'w', encoding=ENCODING) as f:
-                json.dump(ip, f, ensure_ascii=False)
-            print('ip regnums downloaded')
-            jur = requests.get("http://egr.gov.by/egrn/API.jsp?TP=2&MASK=01000000000000000").json()
-            jur_regnums = [regnum['NM'] for regnum in jur]
-            with open(os.path.join(PATH, "jur.json"), 'w', encoding=ENCODING) as f:
-                json.dump(jur, f, ensure_ascii=False)
-            print('jur regnums downloaded')
-        return ip_regnums, jur_regnums
+            self.get_regnums_from_api()
+        return self.ip_regnums, self.jur_regnums
 
 
 class EgrUrls:
-    common_methods = ['getAllAddressByRegNum', 'getAllVEDByRegNum', 'getBaseInfoByRegNum',
+    COMMON_METHODS = ['getAllAddressByRegNum', 'getAllVEDByRegNum', 'getBaseInfoByRegNum',
                       'getEventsByRegNum', 'getShortInfoByRegNum']
-    ip_methods = ['getAllIPFIOByRegNum']
-    jur_methods = ['getAllJurNamesByRegNum']
+    IP_METHODS = ['getAllIPFIOByRegNum']
+    JUR_METHODS = ['getAllJurNamesByRegNum']
 
     def __init__(self, ip_regnums, jur_regnums):
         self.urls = []
@@ -48,31 +61,30 @@ class EgrUrls:
 
     def create_urls(self, regnums, separate_method):
         for regnum in regnums:
-            for method in self.common_methods + separate_method:
-                self.urls.append(f'http://egr.gov.by/api/v2/egr/{method}/{regnum}')
+            for method in self.COMMON_METHODS + separate_method:
+                url = f'http://egr.gov.by/api/v2/egr/{method}/{regnum}'
+                self.urls.append(url)
 
     def get_urls(self):
         print('Create urls.')
-        self.create_urls(self.ip_regnums, self.ip_methods)
-        self.create_urls(self.jur_regnums, self.jur_methods)
+        self.create_urls(self.ip_regnums, self.IP_METHODS)
+        self.create_urls(self.jur_regnums, self.JUR_METHODS)
         return self.urls
 
 
 class EgrSave:
     @staticmethod
     def save_data(jsons):
-        if not os.path.exists(os.path.join(PATH, 'jsons')):
-            os.mkdir(os.path.join(PATH, 'jsons'))
-        for i in range(0, len(jsons), 20000):
-            with open(os.path.join(PATH, 'jsons', f'data{int(i / 20000 + 1)}.json'), 'w', encoding=ENCODING) as f:
-                json.dump(dict(itertools.islice(jsons.items(), i, i + 20000)), f, ensure_ascii=False)
+        json_path = join(PATH, 'jsons')
+        if not exists(json_path):
+            os.mkdir(json_path)
+        for current_row in range(0, len(jsons), 20000):
+            with open(join(json_path, f'data{int(current_row / 20000 + 1)}.json'), 'w', encoding=ENCODING) as f:
+                json.dump(dict(itertools.islice(jsons.items(), current_row, current_row + 20000)), f,
+                          ensure_ascii=False)
 
 
-class EgrParser:
-    def __init__(self, urls):
-        self.all_urls = urls
-        self.main_list = {}
-
+class EgrRequests:
     @staticmethod
     def load_url(url):
         resp = requests.get(url)
@@ -80,46 +92,57 @@ class EgrParser:
 
     @staticmethod
     def server_check(url='http://egr.gov.by/api/v2/egr/getAllAddressByRegNum/100059271'):
-        resp, _ = EgrParser.load_url(url)
+        resp, _ = EgrRequests.load_url(url)
         resp.raise_for_status()
 
-    def parse_json(self, resp, url):
-        try:
-            data = resp.json()
-        except JSONDecodeError:
-            self.all_urls.remove(url)
-            return
-        regnum = url.split('/')[-1]
-        if not self.main_list.get(regnum):
-            self.main_list[regnum] = []
-        self.main_list[regnum] += data if isinstance(data, list) else [data, ]
-        self.all_urls.remove(url)
-
-    def get_jsons(self, urls):
+    @staticmethod
+    def get_resps(urls):
+        resps_and_urls = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
-            future_to_url = (executor.submit(self.load_url, url) for url in urls)
+            future_to_url = (executor.submit(EgrRequests.load_url, url) for url in urls)
             for future in concurrent.futures.as_completed(future_to_url):
                 try:
                     resp, url = future.result()
                 except requests.exceptions.ConnectionError:
                     continue
                 else:
-                    self.parse_json(resp, url)
+                    resps_and_urls.append((resp, url))
+        return resps_and_urls
+
+
+class EgrParser:
+    def __init__(self, urls):
+        self.all_urls = urls
+        self.main_list = {}
+
+    def parse_json(self, resps_and_urls):
+        for resp, url in resps_and_urls:
+            try:
+                data = resp.json()
+            except JSONDecodeError:
+                self.all_urls.remove(url)
+                continue
+            regnum = url.split('/')[-1]
+            if not self.main_list.get(regnum):
+                self.main_list[regnum] = []
+            self.main_list[regnum] += data if isinstance(data, list) else [data, ]  # сохранять метод для регнама
+            self.all_urls.remove(url)
 
     def get_data(self):
-        self.server_check()
-        self.all_urls = self.all_urls[:200_000]
+        EgrRequests.server_check()
+        self.all_urls = self.all_urls[:20_000]
         while len(self.all_urls) > 0:
             for i in range(0, len(self.all_urls), 500):
                 if i % 1000 == 0:
-                    print(f'{len(self.all_urls)} urls left.')
-                self.get_jsons(self.all_urls[i:i + 500])
+                    print(f'{len(self.all_urls)} urls left. downloaded regnums - {len(self.main_list)}')
+                resps_and_urls = EgrRequests.get_resps(self.all_urls[i:i + 500])
+                self.parse_json(resps_and_urls)
         print('main list -', len(self.main_list), 'remain -', len(self.all_urls))
         return self.main_list
 
 
 def main():
-    ip_regnums, jur_regnums = EgrRegNums.get_regnums()
+    ip_regnums, jur_regnums = EgrRegNums().get_regnums()
     urls = EgrUrls(ip_regnums, jur_regnums).get_urls()
     egr = EgrParser(urls)
     time1 = time.time()
@@ -135,3 +158,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+# скорость методов протестить(каждый из 7), в базу уложить
+# регнам метод1 ответ1
+# регнам метод1 ответ1
