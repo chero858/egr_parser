@@ -1,12 +1,12 @@
-import itertools
 import time
-from json import JSONDecodeError
 import requests
 import json
-import os
-from os.path import join, dirname, abspath, isfile, exists
+from os.path import join, dirname, abspath, isfile
+from json import JSONDecodeError
 
 import concurrent.futures
+
+from egr_save import EgrSave
 
 PATH = dirname(abspath(__file__))
 ENCODING = 'utf-8'
@@ -72,18 +72,6 @@ class EgrUrls:
         return self.urls
 
 
-class EgrSave:
-    @staticmethod
-    def save_data(jsons):
-        json_path = join(PATH, 'jsons')
-        if not exists(json_path):
-            os.mkdir(json_path)
-        for current_row in range(0, len(jsons), 20000):
-            with open(join(json_path, f'data{int(current_row / 20000 + 1)}.json'), 'w', encoding=ENCODING) as f:
-                json.dump(dict(itertools.islice(jsons.items(), current_row, current_row + 20000)), f,
-                          ensure_ascii=False)
-
-
 class EgrRequests:
     @staticmethod
     def load_url(url):
@@ -122,15 +110,16 @@ class EgrParser:
             except JSONDecodeError:
                 self.all_urls.remove(url)
                 continue
-            regnum = url.split('/')[-1]
+            regnum = int(url.split('/')[-1])
+            method = url.split('/')[-2]
             if not self.main_list.get(regnum):
-                self.main_list[regnum] = []
-            self.main_list[regnum] += data if isinstance(data, list) else [data, ]  # сохранять метод для регнама
+                self.main_list[regnum] = {}
+            self.main_list[regnum][method] = data if isinstance(data, list) else [data, ]
             self.all_urls.remove(url)
 
     def get_data(self):
         EgrRequests.server_check()
-        self.all_urls = self.all_urls[:20_000]
+        self.all_urls = self.all_urls[:10]
         while len(self.all_urls) > 0:
             for i in range(0, len(self.all_urls), 500):
                 if i % 1000 == 0:
@@ -145,20 +134,17 @@ def main():
     ip_regnums, jur_regnums = EgrRegNums().get_regnums()
     urls = EgrUrls(ip_regnums, jur_regnums).get_urls()
     egr = EgrParser(urls)
+    egr_saver = EgrSave()
     time1 = time.time()
     try:
         egr.get_data()
-        EgrSave.save_data(egr.main_list)
+        egr_saver.save_data(egr.main_list)
     except KeyboardInterrupt:
         print(len(egr.main_list))
-        EgrSave.save_data(egr.main_list)
+        egr_saver.save_data(egr.main_list)
     time2 = time.time()
     print(f'Took {time2 - time1:.2f} s')
 
 
 if __name__ == '__main__':
     main()
-
-# скорость методов протестить(каждый из 7), в базу уложить
-# регнам метод1 ответ1
-# регнам метод1 ответ1
