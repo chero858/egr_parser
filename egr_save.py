@@ -36,8 +36,8 @@ class EgrSave:
     def save_data(self, jsons):
         for regnum, regnum_info in jsons.items():
             for method, info in regnum_info.items():
-                query = f"INSERT INTO regnums_info(regnum, method, info) VALUES({regnum}, '{method}', '{json.dumps(info, ensure_ascii=False)}') "
-                self.cur.execute(query)
+                query = f"INSERT INTO regnums_info(regnum, method, info) VALUES(%s, %s, %s);"
+                self.cur.execute(query, (regnum, method, json.dumps(info, ensure_ascii=False)))
 
     def clear_db(self):
         query = f'''TRUNCATE TABLE regnums_info 
